@@ -10,8 +10,10 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "4.2"
+BOT_VERSION = "4.3"
 
+bravo_rts = []
+kmb_rts = []
 company_wise_sort_criteria = {
     'bravobus': ['no', 'title', 'date', 'route'],
     'KMBLWB': ['url', 'number', 'title', 'route']
@@ -255,15 +257,21 @@ async def probe_(textchannel: dc.TextChannel, company:str, routes:list, displayn
     await fetch_notices(textchannel, routes, t, company, thread)
     print(f'Probe for {displayname} stopped.')
 
-import os
-async def pop_file():
-    os.scandir()
-    print('Pop finished')
+async def enquire_route(channel: dc.TextChannel, route : str):
+    await channel.send(f"CNB V{BOT_VERSION}: Enquires route {route}")
+    results_message = f'bravobus {route}'
+    results_message += '' if route in bravo_rts else ' not'
+    results_message += ' found. '
+    results_message += ':yellow_circle:' if route in bravo_rts else ':negative_squared_cross_mark:'
+    results_message += f'\nKMB {route}'
+    results_message += ' found. :red_circle:' if route in kmb_rts else ' not found. :negative_squared_cross_mark:'
+    await channel.send(results_message)
 
 import atexit
 def run_discord_bot():
     global TOKEN
     bot_intent = dc.Intents.default()
+    bot_intent.message_content = True
     client = dc.Client(intents=bot_intent)
 
     @atexit.register
@@ -283,8 +291,8 @@ def run_discord_bot():
     @client.event
     async def on_ready():
         print(f'{BOT_NAME} Ready, Version {BOT_VERSION}')
-        bravo_rts = find_bravo_routes() #print(f'{bravo_rts = }')
-        kmb_rts = find_kmb_routes() #print(f'{kmb_rts = }')
+        global bravo_rts; bravo_rts = find_bravo_routes() #print(f'{bravo_rts = }')
+        global kmb_rts; kmb_rts = find_kmb_routes() #print(f'{kmb_rts = }')
         guild = client.guilds[0]
         text_channel = guild.channels[0].text_channels[0]
         probes_.start(text_channel, bravo_rts, kmb_rts)
@@ -294,8 +302,12 @@ def run_discord_bot():
         print(message.content)
         if message.content[:5].lower() == "!cnb ":
             actual_content = message.content[5:]
-            if actual_content[:4].lower() == "pop":
-                await pop_file()
+            if actual_content[:5].lower() == "route":
+                await enquire_route(message.channel, actual_content[::])
+        else:
+            commands_list = message.content.split(' ')
+            if 'route' in commands_list:
+                await enquire_route(message.channel, commands_list[commands_list.index('route') + 1])
 
     client.run(TOKEN)
 
