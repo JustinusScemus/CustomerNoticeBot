@@ -10,7 +10,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "4.3"
+BOT_VERSION = "4.4"
 
 bravo_rts = []
 kmb_rts = []
@@ -254,6 +254,9 @@ async def probe_(textchannel: dc.TextChannel, company:str, routes:list, displayn
     if 455 < int(t[8:12]) < 505:
         print(f'Searching {displayname} routes')
     print(f'Probe for {displayname}...')
+    if t[8:12] == '1158' and company == 'KMB':
+        print('KMB 11:58 pause')
+        return
     await fetch_notices(textchannel, routes, t, company, thread)
     print(f'Probe for {displayname} stopped.')
 
