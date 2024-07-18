@@ -10,7 +10,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "4.4"
+BOT_VERSION = "4.5"
 
 bravo_rts = []
 kmb_rts = []
@@ -253,8 +253,25 @@ async def probe_(textchannel: dc.TextChannel, company:str, routes:list, displayn
     if displayname is None: displayname = company
     if 455 < int(t[8:12]) < 505:
         print(f'Searching {displayname} routes')
+        in_route_list : list[str]
+        if company == 'bravobus':
+            in_route_list = find_bravo_routes()
+        elif company == 'KMBLWB':
+            in_route_list = find_kmb_routes()
+        new_route_set = set(in_route_list) - set (routes)
+        if len(new_route_set) > 0:
+            message = f":{'red' if company== 'KMBLWB' else 'yellow'}_circle:" * 5
+            message += f"CNB V{BOT_VERSION}: New route for {company}: {new_route_set}\n@everyone"
+            await textchannel.send(message)
+            routes = in_route_list
+            if company == 'bravobus':
+                global bravo_rts
+                bravo_rts = in_route_list
+            elif company == 'KMBLWB':
+                global kmb_rts
+                kmb_rts = in_route_list
     print(f'Probe for {displayname}...')
-    if t[8:12] == '1158' and company == 'KMB':
+    if t[8:12] == '1158' and company == 'KMBLWB':
         print('KMB 11:58 pause')
         return
     await fetch_notices(textchannel, routes, t, company, thread)
@@ -303,6 +320,8 @@ def run_discord_bot():
     @client.event
     async def on_message(message: dc.Message):
         print(message.content)
+        if message.author == client.user:
+            return
         if message.content[:5].lower() == "!cnb ":
             actual_content = message.content[5:]
             if actual_content[:5].lower() == "route":
