@@ -3,14 +3,15 @@ from discord.ext import tasks
 from secret import TOKEN
 import asyncio as aio
 from bs4 import BeautifulSoup as bs
-import re
+import datetime
+from datetime import datetime as dt, timezone as tz, timedelta as td
 import os
 import json
 import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "4.5"
+BOT_VERSION = "4.5a"
 
 bravo_rts = []
 kmb_rts = []
@@ -248,28 +249,10 @@ async def fetch_notices(textchannel, rts, t, company, thread_count = 1):
     return
 
 async def probe_(textchannel: dc.TextChannel, company:str, routes:list, displayname:str = None, thread: int = 1):
-    from datetime import datetime as dt, timezone as tz, timedelta as td
     t = dt.now(tz(td(hours=+8))).strftime("%Y%m%d%H%M%S")
     if displayname is None: displayname = company
-    if 455 < int(t[8:12]) < 505:
-        print(f'Searching {displayname} routes')
-        in_route_list : list[str]
-        if company == 'bravobus':
-            in_route_list = find_bravo_routes()
-        elif company == 'KMBLWB':
-            in_route_list = find_kmb_routes()
-        new_route_set = set(in_route_list) - set (routes)
-        if len(new_route_set) > 0:
-            message = f":{'red' if company== 'KMBLWB' else 'yellow'}_circle:" * 5
-            message += f"CNB V{BOT_VERSION}: New route for {company}: {new_route_set}\n@everyone"
-            await textchannel.send(message)
-            routes = in_route_list
-            if company == 'bravobus':
-                global bravo_rts
-                bravo_rts = in_route_list
-            elif company == 'KMBLWB':
-                global kmb_rts
-                kmb_rts = in_route_list
+    #if 455 < int(t[8:12]) < 505:
+        
     print(f'Probe for {displayname}...')
     if t[8:12] == '1158' and company == 'KMBLWB':
         print('KMB 11:58 pause')
@@ -307,6 +290,28 @@ def run_discord_bot():
             probe_(text_channel, "KMBLWB", kmb_rts, "KMB", 16)
         )
 
+    @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
+    async def update_bravo_routes(textchannel: dc.TextChannel):
+        print('Searching Citybus routes')
+        in_route_list = find_bravo_routes()
+        in_route_list = find_kmb_routes()
+        new_route_set = set(in_route_list) - set (bravo_rts)
+        if len(new_route_set) > 0:
+            message = ":yellow_circle:" * 5
+            message += f"CNB V{BOT_VERSION}: New route for bravovus: {new_route_set}\n@everyone"
+            await textchannel.send(message)
+            bravo_rts = in_route_list
+
+    @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
+    async def update_kmb_routes(textchannel: dc.TextChannel):
+        print(f'Searching KMB routes')
+        in_route_list : list[str] = find_kmb_routes()
+        new_route_set = set(in_route_list) - set (kmb_rts)
+        if len(new_route_set) > 0:
+            message = ":red_circle:" * 5
+            message += f"CNB V{BOT_VERSION}: New route for KMBLWB: {new_route_set}\n@everyone"
+            await textchannel.send(message)
+            kmb_rts = in_route_list
 
     @client.event
     async def on_ready():
@@ -316,6 +321,8 @@ def run_discord_bot():
         guild = client.guilds[0]
         text_channel = guild.channels[0].text_channels[0]
         probes_.start(text_channel, bravo_rts, kmb_rts)
+        update_bravo_routes.start(text_channel)
+        update_kmb_routes.start(text_channel)
             
     @client.event
     async def on_message(message: dc.Message):
