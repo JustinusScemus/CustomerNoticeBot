@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "4.5a"
+BOT_VERSION = "4.5b"
 
 bravo_rts = []
 kmb_rts = []
@@ -149,6 +149,11 @@ def find_kmb_routes():
     data = json.loads(uo('GET', addr).data.decode('utf-8'))
     return list({d['route'] for d in data['data']})
 
+def find_nlb_routes():
+    addr = 'https://rt.data.gov.hk/v2/transport/nlb/route.php?action=list'
+    data = json.loads(uo('GET', addr).data.decode('utf-8'))
+    return list({d['routeNo'] for d in data['routes']})
+
 import threading
 def find_bravo_notice_one(routes, parts: slice, notice_dict):
     
@@ -162,7 +167,7 @@ def find_bravo_notice_one(routes, parts: slice, notice_dict):
             for _ in data.findAll('td', {'valign': 'middle', 'colspan': '2'}):
                     entry = _.get_text()
                     notice_dict[(notice_no, rt)] = [entry[:11].strip(), entry[11:].strip()]
-    print(f'Thread {parts.start} ends.') #for debug
+    print(f'Thread {parts.start} ends', end='. ') #for debug
 
 async def find_bravo_notice(rts, threads):
     notice_dict = dict()
@@ -189,7 +194,7 @@ def find_kmb_notice_one(routes, parts: slice, notice_dict):
                         notice_dict[(url[:-4], rt)] = [refno, rt_notice['kpi_title_chi']]
             except TypeError:
                     None
-    print(f'Thread {parts.start} ends.') #for debug
+    print(f'Thread {parts.start} ends', end='. ') #for debug
 
 async def find_kmb_notice(kmb_rts, threads):
     notice_dict = dict()
