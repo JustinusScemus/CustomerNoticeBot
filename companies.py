@@ -8,7 +8,7 @@ class Company:
         self.link = link
 
     def circles(self, number):
-        return f':{self.colour}_circles:' * number
+        return f':{self.colour}_circle:' * number
     
     def squares(self, number):
-        return f':{self.colour}_squares:' * number
+        return f':{self.colour}_square:' * number
