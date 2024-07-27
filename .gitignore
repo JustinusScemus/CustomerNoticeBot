@@ -1,4 +1,5 @@
 secret.py
 bravobus/notices/*
 KMBLWB/notices/*
+NLB/*
 __pycache__/*

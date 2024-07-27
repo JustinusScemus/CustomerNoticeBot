@@ -11,14 +11,12 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "4.5b"
+BOT_VERSION = "5.0"
 
-bravo_rts = []
-kmb_rts = []
-company_wise_sort_criteria = {
-    'bravobus': ['no', 'title', 'date', 'route'],
-    'KMBLWB': ['url', 'number', 'title', 'route']
-}
+from companies import Company
+Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
+KMBus = Company([], ['url', 'number', 'title', 'route'], 'red', "KMB", "KMBLWB", 'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url={target}.pdf')
+NLBus = Company([], [], 'green', "NLB", "NLB", 'https://www.nlb.com.hk/news/detail/{target}')
 
 def move_old_info(o, n):
     os.remove(o)
@@ -26,28 +24,31 @@ def move_old_info(o, n):
     return
 
 
-def create_set_from_json(notice_file, company):
+def create_set_from_json(notice_file, company) -> tuple[dict, set]:
     data = open(notice_file, encoding="utf-8")
     notices = json.loads(data.read().encode('utf-8'))
     data.close()
     notice_set = set()
     for _ in notices['data']:
-        notice_set.add(_[company_wise_sort_criteria[company][0]])
+        notice_set.add(_[0] if company == NLBus else _[company.sort_criteria[0]])
     return notices, notice_set
 
 
 def check_notices_info(notices, notice_json, company):
     changed_contents = list()
     for notice in notices:
+      if company == NLBus:
+        pass #TODO
+      else:
         for info in notice_json:
-            if info[company_wise_sort_criteria[company][0]] == notice:
-                changed_contents.append([info[criterion] for criterion in company_wise_sort_criteria[company]])
+            if info[company.sort_criteria[0]] == notice:
+                changed_contents.append([info[criterion] for criterion in company.sort_criteria])
                 break
     changed_contents.sort()
     return changed_contents
 
 def check_for_changed(notices, old_json, new_json, company):
-    changed_contents = list(); criteria = company_wise_sort_criteria[company]
+    changed_contents = list(); criteria = company.sort_criteria
     for notice in notices:
         for info in old_json:
             if info[criteria[0]] == notice:
@@ -64,14 +65,14 @@ def check_for_changed(notices, old_json, new_json, company):
     changed_contents.sort()
     return changed_contents
 
-async def notify(channel: dc.TextChannel, mode: int, title: str, link: str, company):
+async def notify(channel: dc.TextChannel, mode: int, title: str, link: str, company:Company):
     if mode > 0:
         verb = "added"
     elif mode < 0:
         verb = "removed"
     else:
         verb = "amended"
-    message = f":{'red' if company == 'KMBLWB' else 'yellow'}_square:" * 10
+    message = company.circles(10)
     message += f'\nNotice {verb}: {title}'
     if mode >= 0: #if removed, link is meaningless
         message += f"\n{link}"
@@ -80,7 +81,7 @@ async def notify(channel: dc.TextChannel, mode: int, title: str, link: str, comp
     except Exception as e:
         print("Failed:", e)
 
-async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, added, tier_new, changed, updates_file, company):
+async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, added, tier_new, changed, updates_file, company:Company):
     txt = open(updates_file, encoding="utf-8")
     ori = txt.read()
     txt.close()
@@ -94,26 +95,26 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
     txt.write('Removed notice(s):\n')
     for notice in removed:
         txt.write(f'{str(notice)}\n')
-        title = notice[company_wise_sort_criteria[company].index('title')]
-        link = f'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url={notice[0]}.pdf' if company == "KMBLWB" else f'http://mobile.bravobus.com.hk/pdf/{notice[0]}.pdf'
+        title = notice[company.sort_criteria.index('title')]
+        link = company.link.format(target=notice[0])
         await notify(channel, -1, title, link, company)
 
     txt.write('\nAdded notice(s):\n')
     for notice in added:
         txt.write(f'{str(notice)}\n')
-        title = notice[company_wise_sort_criteria[company].index('title')]
-        link = f'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url={notice[0]}.pdf' if company == "KMBLWB" else f'http://mobile.bravobus.com.hk/pdf/{notice[0]}.pdf'
+        title = notice[company.sort_criteria.index('title')]
+        link = company.link.format(target=notice[0])
         await notify(channel, 1, title, link, company)
 
     txt.write('\nAmended notice(s):\n')
     for notice in changed:
         txt.write(f'{str(notice)}\n')
-        title = notice[company_wise_sort_criteria[company].index('title')]
-        link = f'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url={notice[0]}.pdf' if company == "KMBLWB" else f'http://mobile.bravobus.com.hk/pdf/{notice[0]}.pdf'
+        title = notice[company.sort_criteria.index('title')]
+        link = company.link.format(target=notice[0])
         await notify(channel, 0, title, link, company)
 
     if len(removed) + len(added) + len(changed) == 0 and tier_new[0:10] != tier_old[0:10]:
-        message = f":{'red' if company == 'KMBLWB' else 'yellow'}_square:" * 10
+        message = company.circles(10)
         message += f"\nCNB V{BOT_VERSION}: No notice updates for {company}"
         try:
             await channel.send(message)
@@ -125,12 +126,13 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
     txt.close()
     return
 
-async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company):
-    url_template = 'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url=' if company == 'KMBLWB' else 'http://mobile.bravobus.com.hk/pdf/'
-    field_to_look = company_wise_sort_criteria[company].index('title') #2 if company == 'KMBLWB' else 1
+async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company:Company):
+    #url_template = 'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url=' if company == 'KMBLWB' else 'http://mobile.bravobus.com.hk/pdf/'
+    if company == NLBus: return
+    field_to_look = company.sort_criteria.index('title') #2 if company == 'KMBLWB' else 1
     for notice in notices:
-        url = url_template + f'{notice[0]}.pdf'
-        path = f'{company}/notices/{notice[0]}.pdf'
+        url = company.link.format(target = notice[0])
+        path = f'{company.filename}/notices/{notice[0]}.pdf'
         print(f'processing {notice[field_to_look]}')
         with open(path, 'wb') as f:
             f.write(uo('GET', url, preload_content=False).read())
@@ -169,10 +171,10 @@ def find_bravo_notice_one(routes, parts: slice, notice_dict):
                     notice_dict[(notice_no, rt)] = [entry[:11].strip(), entry[11:].strip()]
     print(f'Thread {parts.start} ends', end='. ') #for debug
 
-async def find_bravo_notice(rts, threads):
+async def find_bravo_notice(threads):
     notice_dict = dict()
     threads_list = [
-        threading.Thread(target=find_bravo_notice_one, args=(rts, slice(i,-1,threads), notice_dict))
+        threading.Thread(target=find_bravo_notice_one, args=(Citybus.routeslist, slice(i,-1,threads), notice_dict))
         for i in range(threads)
     ]
     for thread in threads_list:
@@ -196,10 +198,10 @@ def find_kmb_notice_one(routes, parts: slice, notice_dict):
                     None
     print(f'Thread {parts.start} ends', end='. ') #for debug
 
-async def find_kmb_notice(kmb_rts, threads):
+async def find_kmb_notice(threads):
     notice_dict = dict()
     threads_list = [
-        threading.Thread(target=find_kmb_notice_one, args=(kmb_rts, slice(i,-1,threads), notice_dict))
+        threading.Thread(target=find_kmb_notice_one, args=(KMBus.routeslist, slice(i,-1,threads), notice_dict))
         for i in range(threads)
     ]
     for thread in threads_list:
@@ -209,24 +211,37 @@ async def find_kmb_notice(kmb_rts, threads):
     
     return notice_dict
 
+import re
+async def find_nlb_notice(threads):
+    notice_dict = dict()
+    notices = bs(uo('GET', 'https://www.nlb.com.hk/news', timeout=250).data, 'html.parser').find_all('a', href=re.compile("news/detail/.+"), class_="")
+    for notice in notices:
+        notice_dict[int(notice.get('href').strip('news/detail'))] = notice.get_text()
+    return notice_dict
 
-async def sort_notice(rts, threads, company):
-    notices = await find_bravo_notice(rts, threads) if company == "bravobus" else await find_kmb_notice(rts, threads)
+Citybus.findnotice = find_bravo_notice
+KMBus.findnotice = find_kmb_notice
+NLBus.findnotice = find_nlb_notice
+
+async def sort_notice(threads, company:Company):
+    notices = await company.findnotice(threads)
     notice_list = list()
     for _ in notices:
-        notice_list.append([_[0],
-                            notices[_][1 if company == "bravobus" else 0],
-                            notices[_][0 if company == "bravobus" else 1],
-                            _[1]])
+        if company == Citybus:
+            notice_list.append([_[0], notices[_][1], notices [_][0], _[1]])
+        elif company == KMBus:
+            notice_list.append([_[0], notices[_][0], notices [_][1], _[1]])
+        elif company == NLBus:
+            notice_list.append([_, notices[_]])
     notice_list.sort()
     notices = list()
     for notice in notice_list:
-        notices.append(dict(zip(company_wise_sort_criteria[company], notice)))
+        notices.append(notice if company == NLBus else dict(zip(company.sort_criteria, notice)))
     return notices
 
-async def write_json(old_file, new_file, rts, t, threads, company):
+async def write_json(old_file, new_file, t, threads, company:Company) -> tuple[dict, set]:
     print('working')
-    notices = await sort_notice(rts, threads, company)
+    notices = await sort_notice(threads, company)
     dictionary = {'data': notices, 'time': t}
     json_object = json.dumps(dictionary, indent=2)
     print('json')
@@ -235,15 +250,15 @@ async def write_json(old_file, new_file, rts, t, threads, company):
         file.write(json_object)
     notice_set = set()
     for _ in notices:
-        notice_set.add(_[company_wise_sort_criteria[company][0]])
+        notice_set.add(_[0] if company == NLBus else _[company.sort_criteria[0]])
     return dictionary, notice_set
 
-async def fetch_notices(textchannel, rts, t, company, thread_count = 1):
-    old_file = f'{company}/data/{company}_old.json'
-    new_file = f'{company}/data/{company}_new.json'
-    updates_file = f'{company}/data/{company}_notices_update.txt'
+async def fetch_notices(textchannel, t, company:Company, thread_count = 1):
+    old_file = f'{company.filename}/data/{company.filename}_old.json'
+    new_file = f'{company.filename}/data/{company.filename}_new.json'
+    updates_file = f'{company.filename}/data/{company.filename}_notices_update.txt'
 
-    new_json, new_set = await write_json(old_file, new_file, rts, t, thread_count, company)
+    new_json, new_set = await write_json(old_file, new_file, t, thread_count, company)
     old_json, old_set = create_set_from_json(old_file, company)
 
     removed_list = check_notices_info(old_set - new_set, old_json['data'], company)
@@ -253,26 +268,23 @@ async def fetch_notices(textchannel, rts, t, company, thread_count = 1):
     await download_pdf_and_notify(textchannel, added_list, company)
     return
 
-async def probe_(textchannel: dc.TextChannel, company:str, routes:list, displayname:str = None, thread: int = 1):
+async def probe_(textchannel: dc.TextChannel, company:Company, thread: int = 1):
     t = dt.now(tz(td(hours=+8))).strftime("%Y%m%d%H%M%S")
-    if displayname is None: displayname = company
-    #if 455 < int(t[8:12]) < 505:
-        
-    print(f'Probe for {displayname}...')
-    if t[8:12] == '1158' and company == 'KMBLWB':
+    print(f'Probe for {company.displayname}...')
+    if t[8:12] == '1158' and company == KMBus:
         print('KMB 11:58 pause')
         return
-    await fetch_notices(textchannel, routes, t, company, thread)
-    print(f'Probe for {displayname} stopped.')
+    await fetch_notices(textchannel, t, company, thread)
+    print(f'Probe for {company.displayname} stopped.')
 
 async def enquire_route(channel: dc.TextChannel, route : str):
     await channel.send(f"CNB V{BOT_VERSION}: Enquires route {route}")
     results_message = f'bravobus {route}'
-    results_message += '' if route in bravo_rts else ' not'
+    results_message += '' if route in Citybus.routeslist else ' not'
     results_message += ' found. '
-    results_message += ':yellow_circle:' if route in bravo_rts else ':negative_squared_cross_mark:'
+    results_message += ':yellow_circle:' if route in Citybus.routeslist else ':negative_squared_cross_mark:'
     results_message += f'\nKMB {route}'
-    results_message += ' found. :red_circle:' if route in kmb_rts else ' not found. :negative_squared_cross_mark:'
+    results_message += ' found. :red_circle:' if route in KMBus.routeslist else ' not found. :negative_squared_cross_mark:'
     await channel.send(results_message)
 
 import atexit
@@ -289,43 +301,44 @@ def run_discord_bot():
     
     
     @tasks.loop(seconds=15)
-    async def probes_(text_channel, bravo_rts, kmb_rts):
+    async def probes_(text_channel):
         await aio.gather(
-            probe_(text_channel, "bravobus", bravo_rts, "Citybus", 4),
-            probe_(text_channel, "KMBLWB", kmb_rts, "KMB", 16)
+            probe_(text_channel, Citybus, 4),
+            probe_(text_channel, KMBus, 16),
+            probe_(text_channel, NLBus) # NLBus notices are not routewise
         )
 
     @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
     async def update_bravo_routes(textchannel: dc.TextChannel):
         print('Searching Citybus routes')
         in_route_list = find_bravo_routes()
-        in_route_list = find_kmb_routes()
-        new_route_set = set(in_route_list) - set (bravo_rts)
+        new_route_set = set(in_route_list) - set (Citybus.routeslist)
         if len(new_route_set) > 0:
             message = ":yellow_circle:" * 5
             message += f"CNB V{BOT_VERSION}: New route for bravovus: {new_route_set}\n@everyone"
             await textchannel.send(message)
-            bravo_rts = in_route_list
+            Citybus.routeslist = in_route_list
 
     @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
     async def update_kmb_routes(textchannel: dc.TextChannel):
         print(f'Searching KMB routes')
-        in_route_list : list[str] = find_kmb_routes()
-        new_route_set = set(in_route_list) - set (kmb_rts)
+        in_route_list = find_kmb_routes()
+        new_route_set = set(in_route_list) - set (KMBus.routeslist)
         if len(new_route_set) > 0:
             message = ":red_circle:" * 5
             message += f"CNB V{BOT_VERSION}: New route for KMBLWB: {new_route_set}\n@everyone"
             await textchannel.send(message)
-            kmb_rts = in_route_list
+            KMBus.routeslist = in_route_list
 
     @client.event
     async def on_ready():
         print(f'{BOT_NAME} Ready, Version {BOT_VERSION}')
-        global bravo_rts; bravo_rts = find_bravo_routes() #print(f'{bravo_rts = }')
-        global kmb_rts; kmb_rts = find_kmb_routes() #print(f'{kmb_rts = }')
+        Citybus.routeslist = find_bravo_routes()
+        KMBus.routeslist = find_kmb_routes()
+        NLBus.routeslist = find_nlb_routes(); print(f'{NLBus.routeslist = }')
         guild = client.guilds[0]
         text_channel = guild.channels[0].text_channels[0]
-        probes_.start(text_channel, bravo_rts, kmb_rts)
+        probes_.start(text_channel)
         update_bravo_routes.start(text_channel)
         update_kmb_routes.start(text_channel)
             
