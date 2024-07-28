@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.0a"
+BOT_VERSION = "5.0b"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -91,7 +91,7 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
     txt.close()
 
     txt = open(updates_file, 'w', encoding="utf-8")
-    txt.write(f'{company} notices update as of {t[6:8]}/{t[4:6]}/{t[0:4]}, {t[8:10]}:{t[10:12]}:{t[12:14]}\n')
+    txt.write(f'{company.filename} notices update as of {t[6:8]}/{t[4:6]}/{t[0:4]}, {t[8:10]}:{t[10:12]}:{t[12:14]}\n')
     txt.write(f'Comparing notices at {tier_old[6:8]}/{tier_old[4:6]}/{tier_old[0:4]}, {tier_old[8:10]}:{tier_old[10:12]}:{tier_old[12:14]}')
     txt.write(f' and {tier_new[6:8]}/{tier_new[4:6]}/{tier_new[0:4]}, {tier_new[8:10]}:{tier_new[10:12]}:{tier_new[12:14]}\n\n')
 
@@ -120,7 +120,7 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
 
     if len(removed) + len(added) + len(changed) == 0 and tier_new[0:10] != tier_old[0:10]:
         message = company.circles(10)
-        message += f"\nCNB V{BOT_VERSION}: No notice updates for {company}"
+        message += f"\nCNB V{BOT_VERSION}: No notice updates for {company.filename}"
         try:
             await channel.send(message)
             #manually set json to one hour earlier and test using aio run of the coroutine instead to try
