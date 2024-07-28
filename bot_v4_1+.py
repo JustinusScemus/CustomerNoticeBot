@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.1"
+BOT_VERSION = "5.1a"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -30,7 +30,7 @@ def create_set_from_json(notice_file, company) -> tuple[dict, set]:
     data.close()
     notice_set = set()
     for _ in notices['data']:
-        notice_set.add(_[0] if company == NLBus else _[company.sort_criteria[0]])
+        notice_set.add(_[company.sort_criteria[0]])
     return notices, notice_set
 
 
@@ -251,7 +251,7 @@ async def write_json(old_file, new_file, t, threads, company:Company) -> tuple[d
         file.write(json_object)
     notice_set = set()
     for _ in notices:
-        notice_set.add(_[0] if company == NLBus else _[company.sort_criteria[0]])
+        notice_set.add(_[company.sort_criteria[0]])
     return dictionary, notice_set
 
 async def fetch_notices(textchannel, t, company:Company, thread_count = 1):
