@@ -11,12 +11,12 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.0b"
+BOT_VERSION = "5.1"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
 KMBus = Company([], ['url', 'number', 'title', 'route'], 'red', "KMB", "KMBLWB", 'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url={target}.pdf')
-NLBus = Company([], [], 'green', "NLB", "NLB", 'https://www.nlb.com.hk/news/detail/{target}')
+NLBus = Company([], ['no', 'title', 'date'], 'green', "NLB", "NLB", 'https://www.nlb.com.hk/news/detail/{target}')
 
 def move_old_info(o, n):
     os.remove(o)
@@ -37,9 +37,6 @@ def create_set_from_json(notice_file, company) -> tuple[dict, set]:
 def check_notices_info(notices, notice_json, company):
     changed_contents = list()
     for notice in notices:
-      if company == NLBus:
-        pass #TODO
-      else:
         for info in notice_json:
             if info[company.sort_criteria[0]] == notice:
                 changed_contents.append([info[criterion] for criterion in company.sort_criteria])
@@ -49,14 +46,11 @@ def check_notices_info(notices, notice_json, company):
 
 def check_for_changed(notices, old_json, new_json, company:Company):
     changed_contents = list()
-    if company == NLBus:
-      pass #TODO
-    else:
-      criteria = company.sort_criteria
-      for notice in notices:
+    criteria = company.sort_criteria
+    for notice in notices:
         for info in old_json:
             if info[criteria[0]] == notice:
-                temp_old = info[criteria[1]], info[criteria[2]]
+                temp_old = info[criteria[1]], info[criteria[2]] if len(criteria) > 2 else info[criteria[1]]
                 break
         for info in new_json:
             if info[criteria[0]] == notice:
@@ -219,9 +213,11 @@ async def find_kmb_notice(threads):
 import re
 async def find_nlb_notice(threads):
     notice_dict = dict()
-    notices = bs(uo('GET', 'https://www.nlb.com.hk/news', timeout=250).data, 'html.parser').find_all('a', href=re.compile("news/detail/.+"), class_="")
-    for notice in notices:
-        notice_dict[int(notice.get('href').strip('news/detail'))] = notice.get_text()
+    noticepage = bs(uo('GET', 'https://www.nlb.com.hk/news', timeout=250).data, 'html.parser')
+    notices = noticepage.find_all('a', href=re.compile("news/detail/.+"), class_="")
+    noticedates = noticepage.body.div(class_='main')[0].find_all('a', href="#", onclick="return false;")
+    for notice in zip(notices, noticedates):
+        notice_dict[int(notice[0].get('href').strip('news/detail'))] = [notice[0].get_text(), notice[1].get_text()]
     return notice_dict
 
 Citybus.findnotice = find_bravo_notice
@@ -237,11 +233,11 @@ async def sort_notice(threads, company:Company):
         elif company == KMBus:
             notice_list.append([_[0], notices[_][0], notices [_][1], _[1]])
         elif company == NLBus:
-            notice_list.append([_, notices[_]])
+            notice_list.append([_, notices[_][0], notices[_][1]])
     notice_list.sort()
     notices = list()
     for notice in notice_list:
-        notices.append(notice if company == NLBus else dict(zip(company.sort_criteria, notice)))
+        notices.append(dict(zip(company.sort_criteria, notice)))
     return notices
 
 async def write_json(old_file, new_file, t, threads, company:Company) -> tuple[dict, set]:
