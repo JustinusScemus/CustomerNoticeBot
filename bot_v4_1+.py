@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.1a"
+BOT_VERSION = "5.1b"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -89,24 +89,23 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
     txt.write(f'Comparing notices at {tier_old[6:8]}/{tier_old[4:6]}/{tier_old[0:4]}, {tier_old[8:10]}:{tier_old[10:12]}:{tier_old[12:14]}')
     txt.write(f' and {tier_new[6:8]}/{tier_new[4:6]}/{tier_new[0:4]}, {tier_new[8:10]}:{tier_new[10:12]}:{tier_new[12:14]}\n\n')
 
-    if company != NLBus:
     #As an "notice" in removed/added/changed is a list of three, and need to find the "title"
-     txt.write('Removed notice(s):\n')
-     for notice in removed:
+    txt.write('Removed notice(s):\n')
+    for notice in removed:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
         await notify(channel, -1, title, link, company)
 
-     txt.write('\nAdded notice(s):\n')
-     for notice in added:
+    txt.write('\nAdded notice(s):\n')
+    for notice in added:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
         await notify(channel, 1, title, link, company)
 
-     txt.write('\nAmended notice(s):\n')
-     for notice in changed:
+    txt.write('\nAmended notice(s):\n')
+    for notice in changed:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
