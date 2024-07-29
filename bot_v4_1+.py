@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.1b"
+BOT_VERSION = "5.1c"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -25,12 +25,22 @@ def move_old_info(o, n):
 
 
 def create_set_from_json(notice_file, company) -> tuple[dict, set]:
-    data = open(notice_file, encoding="utf-8")
-    notices = json.loads(data.read().encode('utf-8'))
+    from os import path
+    depth = 0
+    while notice_file.find(os.sep) > -1:
+        if not path.exists(notice_file):
+            os.mkdir(notice_file[:notice_file.find(os.sep)])
+        os.chdir(notice_file[:notice_file.find(os.sep)])
+        notice_file = notice_file[notice_file.find(os.sep) + 1:]
+        depth += 1
+    data = open(notice_file, encoding="utf-8", mode='r' if path.exists(notice_file) else 'x')
+    notices = json.loads(data.read().encode('utf-8')) if data.mode == 'r' else {'data': []}
     data.close()
     notice_set = set()
     for _ in notices['data']:
         notice_set.add(_[company.sort_criteria[0]])
+    for _ in range(depth):
+        os.chdir(os.pardir)
     return notices, notice_set
 
 
@@ -73,7 +83,7 @@ async def notify(channel: dc.TextChannel, mode: int, title: str, link: str, comp
     message = company.circles(10)
     message += f'\nNotice {verb}: {title}'
     if mode >= 0: #if removed, link is meaningless
-        message += f"\n{link}"
+        message += f"\n{link}" + '\n@everyone' if company == NLBus else ''
     try:
         await channel.send(message)
     except Exception as e:
@@ -130,7 +140,7 @@ async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company:
     field_to_look = company.sort_criteria.index('title') #2 if company == 'KMBLWB' else 1
     for notice in notices:
         url = company.link.format(target = notice[0])
-        path = f'{company.filename}/notices/{notice[0]}.pdf'
+        path = f'{company.filename}{os.sep}notices{os.sep}{notice[0]}.pdf'
         print(f'processing {notice[field_to_look]}')
         with open(path, 'wb') as f:
             f.write(uo('GET', url, preload_content=False).read())
@@ -254,9 +264,9 @@ async def write_json(old_file, new_file, t, threads, company:Company) -> tuple[d
     return dictionary, notice_set
 
 async def fetch_notices(textchannel, t, company:Company, thread_count = 1):
-    old_file = f'{company.filename}/data/{company.filename}_old.json'
-    new_file = f'{company.filename}/data/{company.filename}_new.json'
-    updates_file = f'{company.filename}/data/{company.filename}_notices_update.txt'
+    old_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_old.json'
+    new_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_new.json'
+    updates_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_notices_update.txt'
 
     new_json, new_set = await write_json(old_file, new_file, t, thread_count, company)
     old_json, old_set = create_set_from_json(old_file, company)
