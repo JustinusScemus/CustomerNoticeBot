@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.1c"
+BOT_VERSION = "5.1c1"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -83,7 +83,7 @@ async def notify(channel: dc.TextChannel, mode: int, title: str, link: str, comp
     message = company.circles(10)
     message += f'\nNotice {verb}: {title}'
     if mode >= 0: #if removed, link is meaningless
-        message += f"\n{link}" + '\n@everyone' if company == NLBus else ''
+        message += f"\n{link}" + ('\n@everyone' if company == NLBus else '')
     try:
         await channel.send(message)
     except Exception as e:
