@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.1c1"
+BOT_VERSION = "5.2"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -25,22 +25,14 @@ def move_old_info(o, n):
 
 
 def create_set_from_json(notice_file, company) -> tuple[dict, set]:
-    from os import path
-    depth = 0
-    while notice_file.find(os.sep) > -1:
-        if not path.exists(notice_file):
-            os.mkdir(notice_file[:notice_file.find(os.sep)])
-        os.chdir(notice_file[:notice_file.find(os.sep)])
-        notice_file = notice_file[notice_file.find(os.sep) + 1:]
-        depth += 1
-    data = open(notice_file, encoding="utf-8", mode='r' if path.exists(notice_file) else 'x')
-    notices = json.loads(data.read().encode('utf-8')) if data.mode == 'r' else {'data': []}
+    data = open(notice_file, encoding="utf-8", mode='r')
+    notices = json.loads(data.read().encode('utf-8'))
     data.close()
     notice_set = set()
     for _ in notices['data']:
         notice_set.add(_[company.sort_criteria[0]])
-    for _ in range(depth):
-        os.chdir(os.pardir)
+    # for _ in range(depth):
+        # os.chdir(os.pardir)
     return notices, notice_set
 
 
@@ -234,16 +226,20 @@ KMBus.findnotice = find_kmb_notice
 NLBus.findnotice = find_nlb_notice
 
 async def sort_notice(threads, company:Company):
-    notices = await company.findnotice(threads)
-    notice_list = list()
-    for _ in notices:
+    try: 
+        notices = await company.findnotice(threads)
+    except TimeoutError:
+        print('\033[35;1mTimeout\033[0m')
+    else:
+      notice_list = list()
+      for _ in notices:
         if company == Citybus:
             notice_list.append([_[0], notices[_][1], notices [_][0], _[1]])
         elif company == KMBus:
             notice_list.append([_[0], notices[_][0], notices [_][1], _[1]])
         elif company == NLBus:
             notice_list.append([_, notices[_][0], notices[_][1]])
-    notice_list.sort()
+      notice_list.sort()
     notices = list()
     for notice in notice_list:
         notices.append(dict(zip(company.sort_criteria, notice)))
@@ -297,6 +293,24 @@ async def enquire_route(channel: dc.TextChannel, route : str):
     results_message += ' found. :red_circle:' if route in KMBus.routeslist else ' not found. :negative_squared_cross_mark:'
     await channel.send(results_message)
 
+def initialize_file(company : Company):
+    subdirs = ['data','notices']
+    for subdir in subdirs:
+        needfile = os.curdir + os.sep + company.filename + os.sep + subdir
+        if not os.path.exists(needfile):
+            os.makedirs(needfile)
+    template = json.dumps({'data': [], 'time': ''})
+    datafiles = {'_old.json': template,
+                 '_new.json': template,
+                 '_notices_update.txt': ''}
+    for file in datafiles:
+        needfile = company.filename + os.sep + 'data' + os.sep + company.filename + file
+        f = open(needfile, ('r' if os.path.exists(needfile) else 'x'))
+        if f.mode=='x':
+            f.write(datafiles[file])
+        print(f'{needfile} initialized.')
+        f.close()
+
 import atexit
 def run_discord_bot():
     global TOKEN
@@ -342,6 +356,9 @@ def run_discord_bot():
 
     @client.event
     async def on_ready():
+        initialize_file(Citybus)
+        initialize_file(KMBus)
+        initialize_file(NLBus)
         print(f'{BOT_NAME} Ready, Version {BOT_VERSION}')
         Citybus.routeslist = find_bravo_routes()
         KMBus.routeslist = find_kmb_routes()
