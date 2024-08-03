@@ -11,12 +11,19 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.2"
+BOT_VERSION = "5.3"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
 KMBus = Company([], ['url', 'number', 'title', 'route'], 'red', "KMB", "KMBLWB", 'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url={target}.pdf')
 NLBus = Company([], ['no', 'title', 'date'], 'green', "NLB", "NLB", 'https://www.nlb.com.hk/news/detail/{target}')
+
+from enum import Enum
+class Mode(Enum):
+    added = 1
+    amended = 0
+    removed = -1
+    
 
 def move_old_info(o, n):
     os.remove(o)
@@ -65,21 +72,34 @@ def check_for_changed(notices, old_json, new_json, company:Company):
     changed_contents.sort()
     return changed_contents
 
-async def notify(channel: dc.TextChannel, mode: int, title: str, link: str, company:Company):
-    if mode > 0:
-        verb = "added"
-    elif mode < 0:
-        verb = "removed"
-    else:
-        verb = "amended"
+async def notify(channel: dc.TextChannel, mode: Mode, title: str, link: str, company:Company, rtno:str = ''):
     message = company.circles(10)
-    message += f'\nNotice {verb}: {title}'
-    if mode >= 0: #if removed, link is meaningless
+    message += f'\nNotice {mode.name}: {title}'
+    if len(rtno) > 0: message += f'\tRoute: {rtno}'
+    if mode != Mode.removed: #if removed, link is meaningless
         message += f"\n{link}" + ('\n@everyone' if company == NLBus else '')
+    await channel.send(message)
+
+async def batch_notify(channel: dc.TextChannel, mode: Mode, notices: list, company:Company):
+    message = company.squares(10)
+    message += f'\nNotices {mode.name} ({len(notices)} in total):\n'
+    back_message = message
+    for notice in notices:
+        message += notice[company.sort_criteria.index("title")] + f'\t{company.link.format(target=notice[0])}\n'
     try:
         await channel.send(message)
     except Exception as e:
-        print("Failed:", e)
+        back_message += f'Message sending fails, because: {e} The following text is what I tried to send.'
+        await channel.send(back_message)
+        m_txt = f'Message {company.displayname}.txt'
+        attempt_message = open(m_txt, mode = 'x', encoding='utf-8')
+        attempt_message.write(message)
+        attempt_message.close()
+        attempt_message = open(m_txt, mode='rb')
+        await channel.send('Attempt Message', file=dc.File(attempt_message))
+        attempt_message.close()
+        os.remove(m_txt)
+        
 
 async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, added, tier_new, changed, updates_file, company:Company):
     txt = open(updates_file, encoding="utf-8")
@@ -93,25 +113,37 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
 
     #As an "notice" in removed/added/changed is a list of three, and need to find the "title"
     txt.write('Removed notice(s):\n')
-    for notice in removed:
+    if len(removed) > 20:
+        txt.write('\n'.join(str(notice) for notice in removed) + '\n')
+        await batch_notify(channel, Mode.removed, removed, company)
+    else:
+      for notice in removed:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
-        await notify(channel, -1, title, link, company)
+        await notify(channel, Mode.removed, title, link, company)
 
     txt.write('\nAdded notice(s):\n')
-    for notice in added:
+    if len(added) > 10:
+        txt.write('\n'.join(str(notice) for notice in added) + '\n')
+        await batch_notify(channel, Mode.added, added, company)
+    else:
+      for notice in added:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
-        await notify(channel, 1, title, link, company)
+        await notify(channel, Mode.added, title, link, company)
 
     txt.write('\nAmended notice(s):\n')
-    for notice in changed:
+    if len(changed) > 10:
+        txt.write('\n'.join(str(notice) for notice in changed) + '\n')
+        await batch_notify(channel, Mode.amended, changed, company)
+    else:
+      for notice in changed:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
-        await notify(channel, 0, title, link, company)
+        await notify(channel, Mode.amended, title, link, company)
 
     if len(removed) + len(added) + len(changed) == 0 and tier_new[0:10] != tier_old[0:10]:
         message = company.circles(10)
