@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.4"
+BOT_VERSION = "5.4a"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -177,25 +177,27 @@ async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company:
             with open(path, 'wb') as f:
                 f.write(uo('GET', url, preload_content = False).read())
             notice_loaded[num] = dc.File(open(path, 'rb'), filename=f'{notice[0]}.pdf')
-        def unravel_dict(d: dict):
+        def unravel_dict(d: dict, start, end):
             l = list()
-            for _ in range(min(len(d), 10)):
+            for _ in range(start, end):
                 l.append(d[_])
             return l
-        notified = 0
-        while notified < len(notices):
-            batch_part = notices[notified:notified+10]
-            batch_files = dict()
-            batch_threads = [threading.Thread(target=download, args=(company, batch_part[e],batch_files,e)) for e in range(min(len(batch_part),10))]
-            for t in batch_threads:
-                t.start()
-            for t in batch_threads:
-                t.join()
-            from math import ceil
-            await textchannel.send(f'{company.squares(3)} Notices batch {notified // 10 + 1} of {ceil(len(notices) / 10)}:\n\n' 
-                                   + '\n'.join(f'{n[field_to_look]}: {n[0]}' for n in batch_part),
-                                   files=unravel_dict(batch_files))
-            notified += 10
+        notice_files = dict()
+        notice_threads = [threading.Thread(target=download, args=(company, notices[e],notice_files,e))
+                          for e in range(len(notices))]
+        for t in notice_threads: t.start()
+        joined = 0; notified = 0
+        joinLock = threading.Lock(); notifiedlock = threading.Lock()
+        for t in notice_threads:
+            t.join()
+            with joinLock: joined += 1
+            if joined - notified >= 10 or joined == len(notices):
+                batch_files = unravel_dict(notice_files, notified, len(notices) if joined == len(notices) else notified + 10)
+                from math import ceil
+                await textchannel.send(f'{company.squares(3)} Notices batch {notified // 10 + 1} of {ceil(len(notices) / 10)}:\n\n' 
+                                   + '\n'.join(f'{n[field_to_look]}: {n[0]}' for n in batch_files),
+                                   files=batch_files)
+                with notifiedlock: notified += 10
     else:
       for notice in notices:
         url = company.link.format(target = notice[0])
