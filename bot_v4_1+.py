@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.3"
+BOT_VERSION = "5.4"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -23,7 +23,13 @@ class Mode(Enum):
     added = 1
     amended = 0
     removed = -1
-    
+   
+batch_threshold = {
+    Mode.added: 10,
+    Mode.amended: 10,
+    Mode.removed: 20
+}
+
 
 def move_old_info(o, n):
     os.remove(o)
@@ -113,7 +119,7 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
 
     #As an "notice" in removed/added/changed is a list of three, and need to find the "title"
     txt.write('Removed notice(s):\n')
-    if len(removed) > 20:
+    if len(removed) > batch_threshold[Mode.removed]:
         txt.write('\n'.join(str(notice) for notice in removed) + '\n')
         await batch_notify(channel, Mode.removed, removed, company)
     else:
@@ -124,7 +130,7 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
         await notify(channel, Mode.removed, title, link, company)
 
     txt.write('\nAdded notice(s):\n')
-    if len(added) > 10:
+    if len(added) > batch_threshold[Mode.added]:
         txt.write('\n'.join(str(notice) for notice in added) + '\n')
         await batch_notify(channel, Mode.added, added, company)
     else:
@@ -135,7 +141,7 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
         await notify(channel, Mode.added, title, link, company)
 
     txt.write('\nAmended notice(s):\n')
-    if len(changed) > 10:
+    if len(changed) > batch_threshold[Mode.amended]:
         txt.write('\n'.join(str(notice) for notice in changed) + '\n')
         await batch_notify(channel, Mode.amended, changed, company)
     else:
@@ -158,18 +164,47 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
     txt.close()
     return
 
-async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company:Company):
-    #url_template = 'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url=' if company == 'KMBLWB' else 'http://mobile.bravobus.com.hk/pdf/'
+import threading
+async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company:Company, mode:Mode):
     if company == NLBus: return
     field_to_look = company.sort_criteria.index('title') #2 if company == 'KMBLWB' else 1
-    for notice in notices:
+    if len(notices) > batch_threshold[mode]:
+        print(f'Batch processing {len(notices)} notices:')
+        print('\t'.join(n[field_to_look] for n in notices))
+        def download(company: Company, notice, notice_loaded: dict, num: int):
+            url = company.link.format(target = notice[0])
+            path = f'{company.filename}{os.sep}notices{os.sep}{notice[0]}.pdf'
+            with open(path, 'wb') as f:
+                f.write(uo('GET', url, preload_content = False).read())
+            notice_loaded[num] = dc.File(open(path, 'rb'), filename=f'{notice[0]}.pdf')
+        def unravel_dict(d: dict):
+            l = list()
+            for _ in range(min(len(d), 10)):
+                l.append(d[_])
+            return l
+        notified = 0
+        while notified < len(notices):
+            batch_part = notices[notified:notified+10]
+            batch_files = dict()
+            batch_threads = [threading.Thread(target=download, args=(company, batch_part[e],batch_files,e)) for e in range(min(len(batch_part),10))]
+            for t in batch_threads:
+                t.start()
+            for t in batch_threads:
+                t.join()
+            from math import ceil
+            await textchannel.send(f'{company.squares(3)} Notices batch {notified // 10 + 1} of {ceil(len(notices) / 10)}:\n\n' 
+                                   + '\n'.join(f'{n[field_to_look]}: {n[0]}' for n in batch_part),
+                                   files=unravel_dict(batch_files))
+            notified += 10
+    else:
+      for notice in notices:
         url = company.link.format(target = notice[0])
         path = f'{company.filename}{os.sep}notices{os.sep}{notice[0]}.pdf'
         print(f'processing {notice[field_to_look]}')
         with open(path, 'wb') as f:
             f.write(uo('GET', url, preload_content=False).read())
         print(f'finished writing {notice[field_to_look]}')
-        await textchannel.send(notice[field_to_look], file=dc.File(open(path, 'rb')))
+        await textchannel.send(notice[field_to_look], file=dc.File(open(path, 'rb'), filename=f'{notice[0]}.pdf'))
         print(f'finished notifying {notice[field_to_look]}')
     return
 
@@ -188,7 +223,6 @@ def find_nlb_routes():
     data = json.loads(uo('GET', addr).data.decode('utf-8'))
     return list({d['routeNo'] for d in data['routes']})
 
-import threading
 def find_bravo_notice_one(routes, parts: slice, notice_dict):
     
     for rt in routes[parts]:
@@ -303,7 +337,8 @@ async def fetch_notices(textchannel, t, company:Company, thread_count = 1):
     added_list = check_notices_info(new_set - old_set, new_json['data'], company)
     changed_list = check_for_changed(old_set & new_set, old_json['data'], new_json['data'], company)
     await write_txt_and_notify(textchannel, t, removed_list, old_json['time'], added_list, new_json['time'], changed_list, updates_file, company)
-    await download_pdf_and_notify(textchannel, added_list, company)
+    await aio.gather(download_pdf_and_notify(textchannel, added_list, company, Mode.added),
+                     download_pdf_and_notify(textchannel, changed_list, company, Mode.amended))
     return
 
 async def probe_(textchannel: dc.TextChannel, company:Company, thread: int = 1):
