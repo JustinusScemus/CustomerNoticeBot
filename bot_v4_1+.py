@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.4a"
+BOT_VERSION = "5.4b"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -192,11 +192,12 @@ async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company:
             t.join()
             with joinLock: joined += 1
             if joined - notified >= 10 or joined == len(notices):
-                batch_files = unravel_dict(notice_files, notified, len(notices) if joined == len(notices) else notified + 10)
+                end = len(notices) if joined == len(notices) else notified + 10
+                batch_files = unravel_dict(notice_files, notified, end)
                 from math import ceil
-                await textchannel.send(f'{company.squares(3)} Notices batch {notified // 10 + 1} of {ceil(len(notices) / 10)}:\n\n' 
-                                   + '\n'.join(f'{n[field_to_look]}: {n[0]}' for n in batch_files),
-                                   files=batch_files)
+                message = f'{company.squares(3)} Notices batch {notified // 10 + 1} of {ceil(len(notices) / 10)}:\n\n'
+                message += '\n'.join(f'{notices[e][field_to_look]}: {notices[e][0]}' for e in range(notified, end))
+                await textchannel.send(message, files=batch_files)
                 with notifiedlock: notified += 10
     else:
       for notice in notices:
