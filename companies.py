@@ -6,6 +6,7 @@ class Company:
         self.displayname = displayname
         self.filename = filename
         self.link = link
+        self.removed_buffer = set()
 
     def circles(self, number):
         return f':{self.colour}_circle:' * number
