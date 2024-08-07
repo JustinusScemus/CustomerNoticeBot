@@ -1,6 +1,6 @@
 import discord as dc
 from discord.ext import tasks
-from secret import TOKEN
+from secret import TEXTCHANNEL_ID, ERRORCHANNEL_ID
 import asyncio as aio
 from bs4 import BeautifulSoup as bs
 import datetime
@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.4b"
+BOT_VERSION = "5.5"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -78,7 +78,7 @@ def check_for_changed(notices, old_json, new_json, company:Company):
     changed_contents.sort()
     return changed_contents
 
-async def notify(channel: dc.TextChannel, mode: Mode, title: str, link: str, company:Company, rtno:str = ''):
+async def notify(channel: dc.TextChannel, error_channel: dc.TextChannel, mode: Mode, title: str, link: str, company:Company, rtno:str = ''):
     message = company.circles(10)
     message += f'\nNotice {mode.name}: {title}'
     if len(rtno) > 0: message += f'\tRoute: {rtno}'
@@ -86,7 +86,7 @@ async def notify(channel: dc.TextChannel, mode: Mode, title: str, link: str, com
         message += f"\n{link}" + ('\n@everyone' if company == NLBus else '')
     await channel.send(message)
 
-async def batch_notify(channel: dc.TextChannel, mode: Mode, notices: list, company:Company):
+async def batch_notify(channel: dc.TextChannel, error_channel: dc.TextChannel, mode: Mode, notices: list, company:Company):
     message = company.squares(10)
     message += f'\nNotices {mode.name} ({len(notices)} in total):\n'
     back_message = message
@@ -96,18 +96,20 @@ async def batch_notify(channel: dc.TextChannel, mode: Mode, notices: list, compa
         await channel.send(message)
     except Exception as e:
         back_message += f'Message sending fails, because: {e} The following text is what I tried to send.'
-        await channel.send(back_message)
+        await error_channel.send(back_message)
         m_txt = f'Message {company.displayname}.txt'
         attempt_message = open(m_txt, mode = 'x', encoding='utf-8')
         attempt_message.write(message)
         attempt_message.close()
         attempt_message = open(m_txt, mode='rb')
-        await channel.send('Attempt Message', file=dc.File(attempt_message))
+        await error_channel.send('Attempt Message', file=dc.File(attempt_message))
+        attempt_message.close(); attempt_message = open(m_txt, mode = 'rb')
+        await channel.send(f'A message was to big to be sent, so it became a file instead in {error_channel.name}', file=dc.File(attempt_message))
         attempt_message.close()
         os.remove(m_txt)
         
 
-async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, added, tier_new, changed, updates_file, company:Company):
+async def write_txt_and_notify(channel: dc.TextChannel, error_channel: dc.TextChannel, t, removed, tier_old, added, tier_new, changed, updates_file, company:Company):
     txt = open(updates_file, encoding="utf-8")
     ori = txt.read()
     txt.close()
@@ -121,35 +123,35 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
     txt.write('Removed notice(s):\n')
     if len(removed) > batch_threshold[Mode.removed]:
         txt.write('\n'.join(str(notice) for notice in removed) + '\n')
-        await batch_notify(channel, Mode.removed, removed, company)
+        await batch_notify(channel, error_channel, Mode.removed, removed, company)
     else:
       for notice in removed:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
-        await notify(channel, Mode.removed, title, link, company)
+        await notify(channel, error_channel, Mode.removed, title, link, company)
 
     txt.write('\nAdded notice(s):\n')
     if len(added) > batch_threshold[Mode.added]:
         txt.write('\n'.join(str(notice) for notice in added) + '\n')
-        await batch_notify(channel, Mode.added, added, company)
+        await batch_notify(channel, error_channel, Mode.added, added, company)
     else:
       for notice in added:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
-        await notify(channel, Mode.added, title, link, company)
+        await notify(channel, error_channel, Mode.added, title, link, company)
 
     txt.write('\nAmended notice(s):\n')
     if len(changed) > batch_threshold[Mode.amended]:
         txt.write('\n'.join(str(notice) for notice in changed) + '\n')
-        await batch_notify(channel, Mode.amended, changed, company)
+        await batch_notify(channel, error_channel, Mode.amended, changed, company)
     else:
       for notice in changed:
         txt.write(f'{str(notice)}\n')
         title = notice[company.sort_criteria.index('title')]
         link = company.link.format(target=notice[0])
-        await notify(channel, Mode.amended, title, link, company)
+        await notify(channel, error_channel, Mode.amended, title, link, company)
 
     if len(removed) + len(added) + len(changed) == 0 and tier_new[0:10] != tier_old[0:10]:
         message = company.circles(10)
@@ -165,7 +167,7 @@ async def write_txt_and_notify(channel: dc.TextChannel, t, removed, tier_old, ad
     return
 
 import threading
-async def download_pdf_and_notify(textchannel: dc.TextChannel, notices, company:Company, mode:Mode):
+async def download_pdf_and_notify(textchannel: dc.TextChannel, error_channel: dc.TextChannel, notices, company:Company, mode:Mode):
     if company == NLBus: return
     field_to_look = company.sort_criteria.index('title') #2 if company == 'KMBLWB' else 1
     if len(notices) > batch_threshold[mode]:
@@ -328,7 +330,7 @@ async def write_json(old_file, new_file, t, threads, company:Company) -> tuple[d
         notice_set.add(_[company.sort_criteria[0]])
     return dictionary, notice_set
 
-async def fetch_notices(textchannel, t, company:Company, thread_count = 1):
+async def fetch_notices(textchannel, error_channel, t, company:Company, thread_count = 1):
     old_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_old.json'
     new_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_new.json'
     updates_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_notices_update.txt'
@@ -339,18 +341,18 @@ async def fetch_notices(textchannel, t, company:Company, thread_count = 1):
     removed_list = check_notices_info(old_set - new_set, old_json['data'], company)
     added_list = check_notices_info(new_set - old_set, new_json['data'], company)
     changed_list = check_for_changed(old_set & new_set, old_json['data'], new_json['data'], company)
-    await write_txt_and_notify(textchannel, t, removed_list, old_json['time'], added_list, new_json['time'], changed_list, updates_file, company)
-    await aio.gather(download_pdf_and_notify(textchannel, added_list, company, Mode.added),
-                     download_pdf_and_notify(textchannel, changed_list, company, Mode.amended))
+    await write_txt_and_notify(textchannel, error_channel, t, removed_list, old_json['time'], added_list, new_json['time'], changed_list, updates_file, company)
+    await aio.gather(download_pdf_and_notify(textchannel, error_channel, added_list, company, Mode.added),
+                     download_pdf_and_notify(textchannel, error_channel, changed_list, company, Mode.amended))
     return
 
-async def probe_(textchannel: dc.TextChannel, company:Company, thread: int = 1):
+async def probe_(textchannel: dc.TextChannel, error_channel: dc.TextChannel, company:Company, thread: int = 1):
     t = dt.now(tz(td(hours=+8))).strftime("%Y%m%d%H%M%S")
     print(f'Probe for {company.displayname}...')
     if t[8:12] == '1158' and company == KMBus:
         print('KMB 11:58 pause')
         return
-    await fetch_notices(textchannel, t, company, thread)
+    await fetch_notices(textchannel, error_channel, t, company, thread)
     print(f'Probe for {company.displayname} stopped.')
 
 async def enquire_route(channel: dc.TextChannel, route : str):
@@ -383,7 +385,7 @@ def initialize_file(company : Company):
 
 import atexit
 def run_discord_bot():
-    global TOKEN
+    from secret import TOKEN
     bot_intent = dc.Intents.default()
     bot_intent.message_content = True
     client = dc.Client(intents=bot_intent)
@@ -395,15 +397,15 @@ def run_discord_bot():
     
     
     @tasks.loop(seconds=15)
-    async def probes_(text_channel):
+    async def probes_(text_channel, error_channel):
         await aio.gather(
-            probe_(text_channel, Citybus, 4),
-            probe_(text_channel, KMBus, 16),
-            probe_(text_channel, NLBus) # NLBus notices are not routewise
+            probe_(text_channel, error_channel, Citybus, 4),
+            probe_(text_channel, error_channel, KMBus, 16),
+            probe_(text_channel, error_channel, NLBus) # NLBus notices are not routewise
         )
 
     @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
-    async def update_bravo_routes(textchannel: dc.TextChannel):
+    async def update_bravo_routes(textchannel: dc.TextChannel, error_channel):
         print('Searching Citybus routes')
         in_route_list = find_bravo_routes()
         new_route_set = set(in_route_list) - set (Citybus.routeslist)
@@ -414,7 +416,7 @@ def run_discord_bot():
             Citybus.routeslist = in_route_list
 
     @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
-    async def update_kmb_routes(textchannel: dc.TextChannel):
+    async def update_kmb_routes(textchannel: dc.TextChannel, error_channel):
         print(f'Searching KMB routes')
         in_route_list = find_kmb_routes()
         new_route_set = set(in_route_list) - set (KMBus.routeslist)
@@ -433,11 +435,12 @@ def run_discord_bot():
         Citybus.routeslist = find_bravo_routes()
         KMBus.routeslist = find_kmb_routes()
         NLBus.routeslist = find_nlb_routes(); print(f'{NLBus.routeslist = }')
-        guild = client.guilds[0]
-        text_channel = guild.channels[0].text_channels[0]
-        probes_.start(text_channel)
-        update_bravo_routes.start(text_channel)
-        update_kmb_routes.start(text_channel)
+        # guild = client.guilds[0]
+        text_channel = client.get_channel(TEXTCHANNEL_ID)
+        error_channel = client.get_channel(ERRORCHANNEL_ID)
+        probes_.start(text_channel, error_channel)
+        update_bravo_routes.start(text_channel, error_channel)
+        update_kmb_routes.start(text_channel, error_channel)
             
     @client.event
     async def on_message(message: dc.Message):
