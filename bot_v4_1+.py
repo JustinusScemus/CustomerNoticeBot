@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.6c"
+BOT_VERSION = "5.6d"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -338,7 +338,7 @@ async def fetch_notices(textchannel, error_channel, t, company:Company, thread_c
     new_json, new_set = await write_json(old_file, new_file, t, thread_count, company)
     old_json, old_set = create_set_from_json(old_file, company)
 
-    removed_list = check_notices_info(company.removed_buffer - new_set, old_json, company)
+    removed_list = check_notices_info(company.removed_buffer - new_set, old_json['data'], company)
     company.removed_buffer = old_set - new_set
     if len(company.removed_buffer) > 0:
         print(f'Buffered for {company.displayname}', end=": ")
