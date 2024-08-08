@@ -11,7 +11,8 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.7"
+BOT_VERSION = "5.7a"
+SEP_THREADS_FOR_ROUTE = False
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -242,9 +243,22 @@ def find_bravo_notice_one(routes, parts: slice, notice_dict):
                     notice_dict[(notice_no, rt)] = [entry[:11].strip(), entry[11:].strip()]
     print(f'Thread {parts.start} ends', end='. ') #for debug
 
+def find_bravo_notice_route(route, notice_dict):
+    notice_link = f'http://mobile.citybus.com.hk/nwp3/getnotice.php?id={route}'
+    datas = bs(uo('GET', notice_link, timeout=250).data, 'html.parser').find_all('tr', style="background-color:'#ffffff'; cursor: pointer;")
+    for data in datas:
+        notice_no = data.select_one('td').get('onclick').strip(r'javascript:window.open();').strip(r"'http://mobile.citybus.com.hk/pdf/.pdf'") #fix in V4.2
+        for _ in data.findAll('td', {'valign': 'middle', 'colspan': '2'}):
+            entry = _.get_text()
+            notice_dict[(notice_no, route)] = [entry[:11].strip(), entry[11:].strip()]
+    print('\033[43;30;1m'+route+'\033[0m', end=' ', flush = True)
+
 async def find_bravo_notice(threads):
     notice_dict = dict()
     threads_list = [
+        threading.Thread(target=find_bravo_notice_route, args=(rt, notice_dict))
+        for rt in Citybus.routeslist
+    ] if SEP_THREADS_FOR_ROUTE else [
         threading.Thread(target=find_bravo_notice_one, args=(Citybus.routeslist, slice(i,-1,threads), notice_dict))
         for i in range(threads)
     ]
@@ -269,9 +283,25 @@ def find_kmb_notice_one(routes, parts: slice, notice_dict):
                     None
     print(f'Thread {parts.start} ends', end='. ') #for debug
 
+def find_kmb_notice_route(route, notice_dict):
+    notice_link = f'http://search.kmb.hk/KMBWebSite/Function/FunctionRequest.ashx?action=getAnnounce&route={route}&bound=1'
+    rt_notices = json.loads(uo('GET', notice_link, timeout=250).data.decode('utf-8'))['data']
+    for rt_notice in rt_notices:
+        refno, url = rt_notice['kpi_referenceno'], rt_notice['kpi_noticeimageurl']
+        #with notice_dict_lock:
+        try:
+                if url[-3:] == 'pdf' and refno[:2] != 'MP':
+                    notice_dict[(url[:-4], route)] = [refno, rt_notice['kpi_title_chi']]
+        except TypeError:
+                None
+    print('\033[41;1m'+route+'\033[0m', end=' ', flush = True)
+
 async def find_kmb_notice(threads):
     notice_dict = dict()
     threads_list = [
+        threading.Thread(target=find_kmb_notice_route, args=(rt, notice_dict))
+        for rt in KMBus.routeslist
+    ] if SEP_THREADS_FOR_ROUTE else [
         threading.Thread(target=find_kmb_notice_one, args=(KMBus.routeslist, slice(i,-1,threads), notice_dict))
         for i in range(threads)
     ]
@@ -400,8 +430,8 @@ def run_discord_bot():
     @tasks.loop(seconds=15)
     async def probes_(text_channel, error_channel):
         await aio.gather(
-            probe_(text_channel, error_channel, Citybus, 4),
-            probe_(text_channel, error_channel, KMBus, 16),
+            probe_(text_channel, error_channel, Citybus, len(Citybus.routeslist) if SEP_THREADS_FOR_ROUTE else 4),
+            probe_(text_channel, error_channel, KMBus, len(KMBus.routeslist) if SEP_THREADS_FOR_ROUTE else 16),
             probe_(text_channel, error_channel, NLBus) # NLBus notices are not routewise
         )
 
