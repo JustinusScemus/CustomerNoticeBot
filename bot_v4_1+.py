@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.6d"
+BOT_VERSION = "5.7"
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -330,12 +330,18 @@ async def write_json(old_file, new_file, t, threads, company:Company) -> tuple[d
         notice_set.add(_[company.sort_criteria[0]])
     return dictionary, notice_set
 
-async def fetch_notices(textchannel, error_channel, t, company:Company, thread_count = 1):
+async def probe_(textchannel: dc.TextChannel, error_channel: dc.TextChannel, company:Company, thread: int = 1):
+    t = dt.now(tz(td(hours=+8))).strftime("%Y%m%d%H%M%S")
+    print(f'Probe for {company.displayname}...')
+    if t[8:12] == '1158' and company == KMBus:
+        print('KMB 11:58 pause')
+        return
+    # await fetch_notices(textchannel, error_channel, t, company, thread)
     old_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_old.json'
     new_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_new.json'
     updates_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_notices_update.txt'
 
-    new_json, new_set = await write_json(old_file, new_file, t, thread_count, company)
+    new_json, new_set = await write_json(old_file, new_file, t, thread, company)
     old_json, old_set = create_set_from_json(old_file, company)
 
     removed_list = check_notices_info(company.removed_buffer - new_set, old_json['data'], company)
@@ -348,15 +354,6 @@ async def fetch_notices(textchannel, error_channel, t, company:Company, thread_c
     await write_txt_and_notify(textchannel, error_channel, t, removed_list, old_json['time'], added_list, new_json['time'], changed_list, updates_file, company)
     await aio.gather(download_pdf_and_notify(textchannel, error_channel, added_list, company, Mode.added),
                      download_pdf_and_notify(textchannel, error_channel, changed_list, company, Mode.amended))
-    return
-
-async def probe_(textchannel: dc.TextChannel, error_channel: dc.TextChannel, company:Company, thread: int = 1):
-    t = dt.now(tz(td(hours=+8))).strftime("%Y%m%d%H%M%S")
-    print(f'Probe for {company.displayname}...')
-    if t[8:12] == '1158' and company == KMBus:
-        print('KMB 11:58 pause')
-        return
-    await fetch_notices(textchannel, error_channel, t, company, thread)
     print(f'Probe for {company.displayname} stopped.')
 
 async def enquire_route(channel: dc.TextChannel, route : str):
