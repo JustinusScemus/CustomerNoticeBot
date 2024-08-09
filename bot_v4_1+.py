@@ -11,8 +11,9 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.7a"
-SEP_THREADS_FOR_ROUTE = False
+BOT_VERSION = "5.7b"
+SEP_THREADS_FOR_ROUTE = True
+MAX_ACTIVE_THREAD = 500
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
@@ -263,6 +264,8 @@ async def find_bravo_notice(threads):
         for i in range(threads)
     ]
     for thread in threads_list:
+        while threading.active_count() > MAX_ACTIVE_THREAD:
+            print('wait', end=' ', flush=True)
         thread.start()
     for thread in threads_list:
         thread.join()
@@ -306,6 +309,8 @@ async def find_kmb_notice(threads):
         for i in range(threads)
     ]
     for thread in threads_list:
+        while threading.active_count() > MAX_ACTIVE_THREAD:
+            print('wait', end=' ', flush=True)
         thread.start()
     for thread in threads_list:
         thread.join()
