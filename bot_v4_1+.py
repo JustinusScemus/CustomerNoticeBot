@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.8"
+BOT_VERSION = "5.8a"
 SEP_THREADS_FOR_ROUTE = True
 MAX_ACTIVE_THREAD = 500
 
@@ -449,11 +449,13 @@ def run_discord_bot():
         if len(new_route_set) > 0:
             message = ":yellow_circle:" * 5
             message += f"CNB V{BOT_VERSION}: New route for bravovus: {new_route_set}\n@everyone"
-            await textchannel.send(message)
+            await error_channel.send(message)
             Citybus.routeslist = in_route_list
         if len(removed_routes_set) > 0:
             message = Citybus.circles(5) + f"CNB V{BOT_VERSION}: Citybus removed: {removed_routes_set}\n@everyone"
             await error_channel.send(message)
+        if len(new_route_set) + len(removed_routes_set) == 0:
+            message = Citybus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {Citybus.displayname}"
 
     @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
     async def update_kmb_routes(textchannel: dc.TextChannel, error_channel: dc.TextChannel):
@@ -469,6 +471,8 @@ def run_discord_bot():
         if len(removed_routes_set) > 0:
             message = KMBus.circles(5) + f"CNB V{BOT_VERSION}: KMBLWB removed: {removed_routes_set}\n@everyone"
             await error_channel.send(message)
+        if len(new_route_set) + len(removed_routes_set) == 0:
+            message = KMBus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {KMBus.displayname}"
 
     @client.event
     async def on_ready():
