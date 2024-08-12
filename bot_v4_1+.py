@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.8a"
+BOT_VERSION = "5.8a1"
 SEP_THREADS_FOR_ROUTE = True
 MAX_ACTIVE_THREAD = 500
 
@@ -456,6 +456,7 @@ def run_discord_bot():
             await error_channel.send(message)
         if len(new_route_set) + len(removed_routes_set) == 0:
             message = Citybus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {Citybus.displayname}"
+            await textchannel.send(message)
 
     @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
     async def update_kmb_routes(textchannel: dc.TextChannel, error_channel: dc.TextChannel):
@@ -473,6 +474,7 @@ def run_discord_bot():
             await error_channel.send(message)
         if len(new_route_set) + len(removed_routes_set) == 0:
             message = KMBus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {KMBus.displayname}"
+            await textchannel.send(message)
 
     @client.event
     async def on_ready():
