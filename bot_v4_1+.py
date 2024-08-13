@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.8a1"
+BOT_VERSION = "5.9"
 SEP_THREADS_FOR_ROUTE = True
 MAX_ACTIVE_THREAD = 500
 
@@ -252,7 +252,7 @@ def find_bravo_notice_route(route, notice_dict):
         for _ in data.findAll('td', {'valign': 'middle', 'colspan': '2'}):
             entry = _.get_text()
             notice_dict[(notice_no, route)] = [entry[:11].strip(), entry[11:].strip()]
-    print('\033[43;30;1m'+route+'\033[0m', end=' ', flush = True)
+    print('\033[43;30;1m'+route+'\033[0m', end=' ')
 
 async def find_bravo_notice(threads):
     notice_dict = dict()
@@ -265,7 +265,7 @@ async def find_bravo_notice(threads):
     ]
     for thread in threads_list:
         while threading.active_count() > MAX_ACTIVE_THREAD:
-            print('wait', end=' ', flush=True)
+            print('wait', end=' ')
         thread.start()
     for thread in threads_list:
         thread.join()
@@ -297,7 +297,7 @@ def find_kmb_notice_route(route, notice_dict):
                     notice_dict[(url[:-4], route)] = [refno, rt_notice['kpi_title_chi']]
         except TypeError:
                 None
-    print('\033[41;1m'+route+'\033[0m', end=' ', flush = True)
+    print('\033[41;1m'+route+'\033[0m', end=' ')
 
 async def find_kmb_notice(threads):
     notice_dict = dict()
@@ -440,7 +440,8 @@ def run_discord_bot():
             probe_(text_channel, error_channel, NLBus) # NLBus notices are not routewise
         )
 
-    @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
+    time_4_55 = datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8)))
+    @tasks.loop(time=time_4_55)
     async def update_bravo_routes(textchannel: dc.TextChannel, error_channel: dc.TextChannel):
         print('Searching Citybus routes')
         in_route_list = find_bravo_routes()
@@ -458,7 +459,7 @@ def run_discord_bot():
             message = Citybus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {Citybus.displayname}"
             await textchannel.send(message)
 
-    @tasks.loop(time=datetime.time(hour=4, minute=55, tzinfo=tz(td(hours=+8))))
+    @tasks.loop(time=[time_4_55, datetime.time(hour=11, minute=58, tzinfo=tz(td(hours=+8)))])
     async def update_kmb_routes(textchannel: dc.TextChannel, error_channel: dc.TextChannel):
         print(f'Searching KMB routes')
         in_route_list = find_kmb_routes()
