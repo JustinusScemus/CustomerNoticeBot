@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.9"
+BOT_VERSION = "5.10"
 SEP_THREADS_FOR_ROUTE = True
 MAX_ACTIVE_THREAD = 500
 
@@ -379,11 +379,17 @@ async def probe_(textchannel: dc.TextChannel, error_channel: dc.TextChannel, com
     new_json, new_set = await write_json(old_file, new_file, t, thread, company)
     old_json, old_set = create_set_from_json(old_file, company)
 
-    removed_list = check_notices_info(company.removed_buffer - new_set, old_json['data'], company)
-    company.removed_buffer = old_set - new_set
-    if len(company.removed_buffer) > 0:
+    removed_list = check_notices_info(company.removed_buffer_set - new_set, company.buffered_json_data, company)
+    company.removed_buffer_set = old_set - new_set
+    # company.buffered_json_data = check_notices_info(company.removed_buffer_set, old_json['data'], company)
+    for buffered in company.removed_buffer_set:
+        for info in old_json['data']:
+            if info[company.sort_criteria[0]] == buffered:
+                company.buffered_json_data.append(info)
+                break
+    if len(company.removed_buffer_set) > 0:
         print(f'Buffered for {company.displayname}', end=": ")
-        print("\t".join(company.removed_buffer))
+        print("\t".join(company.removed_buffer_set))
     added_list = check_notices_info(new_set - old_set, new_json['data'], company)
     changed_list = check_for_changed(old_set & new_set, old_json['data'], new_json['data'], company)
     await write_txt_and_notify(textchannel, error_channel, t, removed_list, old_json['time'], added_list, new_json['time'], changed_list, updates_file, company)

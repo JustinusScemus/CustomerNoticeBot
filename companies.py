@@ -6,7 +6,10 @@ class Company:
         self.displayname = displayname
         self.filename = filename
         self.link = link
-        self.removed_buffer = set()
+
+        #buffer stores the "recently-deleted" notices that could arise from instantaneously incomplete probing
+        self.removed_buffer_set = set()
+        self.buffered_json_data = list()
 
     def circles(self, number):
         return f':{self.colour}_circle:' * number
