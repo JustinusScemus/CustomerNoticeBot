@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.10"
+BOT_VERSION = "5.11"
 SEP_THREADS_FOR_ROUTE = True
 MAX_ACTIVE_THREAD = 500
 
@@ -453,35 +453,39 @@ def run_discord_bot():
         in_route_list = find_bravo_routes()
         new_route_set = set(in_route_list) - set (Citybus.routeslist)
         removed_routes_set = set(Citybus.routeslist) - set (in_route_list)
-        if len(new_route_set) > 0:
-            message = ":yellow_circle:" * 5
-            message += f"CNB V{BOT_VERSION}: New route for bravovus: {new_route_set}\n@everyone"
-            await error_channel.send(message)
-            Citybus.routeslist = in_route_list
-        if len(removed_routes_set) > 0:
-            message = Citybus.circles(5) + f"CNB V{BOT_VERSION}: Citybus removed: {removed_routes_set}\n@everyone"
-            await error_channel.send(message)
         if len(new_route_set) + len(removed_routes_set) == 0:
             message = Citybus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {Citybus.displayname}"
             await textchannel.send(message)
+        else:
+          if len(new_route_set) > 0:
+            message = ":yellow_circle:" * 5
+            message += f"CNB V{BOT_VERSION}: New route for bravovus: {new_route_set}\n@everyone"
+            await error_channel.send(message)
+          if len(removed_routes_set) > 0:
+            message = Citybus.circles(5) + f"CNB V{BOT_VERSION}: Citybus removed: {removed_routes_set}\n@everyone"
+            await error_channel.send(message)
+          Citybus.routeslist = in_route_list
+        
 
-    @tasks.loop(time=[time_4_55, datetime.time(hour=11, minute=58, tzinfo=tz(td(hours=+8)))])
+    @tasks.loop(time=time_4_55)
     async def update_kmb_routes(textchannel: dc.TextChannel, error_channel: dc.TextChannel):
         print(f'Searching KMB routes')
         in_route_list = find_kmb_routes()
         new_route_set = set(in_route_list) - set (KMBus.routeslist)
         removed_routes_set = set(KMBus.routeslist) - set (in_route_list)
-        if len(new_route_set) > 0:
-            message = ":red_circle:" * 5
-            message += f"CNB V{BOT_VERSION}: New route for KMBLWB: {new_route_set}\n@everyone"
-            await error_channel.send(message)
-            KMBus.routeslist = in_route_list
-        if len(removed_routes_set) > 0:
-            message = KMBus.circles(5) + f"CNB V{BOT_VERSION}: KMBLWB removed: {removed_routes_set}\n@everyone"
-            await error_channel.send(message)
         if len(new_route_set) + len(removed_routes_set) == 0:
             message = KMBus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {KMBus.displayname}"
             await textchannel.send(message)
+        else:
+          if len(new_route_set) > 0:
+            message = ":red_circle:" * 5
+            message += f"CNB V{BOT_VERSION}: New route for KMBLWB: {new_route_set}\n@everyone"
+            await error_channel.send(message)
+          if len(removed_routes_set) > 0:
+            message = KMBus.circles(5) + f"CNB V{BOT_VERSION}: KMBLWB removed: {removed_routes_set}\n@everyone"
+            await error_channel.send(message)
+          KMBus.routeslist = in_route_list
+        
 
     @client.event
     async def on_ready():
