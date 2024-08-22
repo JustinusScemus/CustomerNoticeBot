@@ -11,8 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.11"
-SEP_THREADS_FOR_ROUTE = True
+BOT_VERSION = "5.12"
 MAX_ACTIVE_THREAD = 500
 
 from companies import Company
@@ -230,19 +229,6 @@ def find_nlb_routes():
     data = json.loads(uo('GET', addr).data.decode('utf-8'))
     return list({d['routeNo'] for d in data['routes']})
 
-def find_bravo_notice_one(routes, parts: slice, notice_dict):
-    
-    for rt in routes[parts]:
-        notice_link = f'http://mobile.citybus.com.hk/nwp3/getnotice.php?id={rt}'
-        datas = bs(uo('GET', notice_link, timeout=250).data, 'html.parser').find_all('tr', style="background-color:'#ffffff'; cursor: pointer;")
-        for data in datas:
-            #notice_no = data.select_one('td').get('onclick').strip(r'javascript:window.open();').strip(r"'http://mobile.bravobus.com.hk/pdf/.pdf'") #The html source still use "bravobus"
-            notice_no = data.select_one('td').get('onclick').strip(r'javascript:window.open();').strip(r"'http://mobile.citybus.com.hk/pdf/.pdf'") #fix in V4.2
-            
-            for _ in data.findAll('td', {'valign': 'middle', 'colspan': '2'}):
-                    entry = _.get_text()
-                    notice_dict[(notice_no, rt)] = [entry[:11].strip(), entry[11:].strip()]
-    print(f'Thread {parts.start} ends', end='. ') #for debug
 
 def find_bravo_notice_route(route, notice_dict):
     notice_link = f'http://mobile.citybus.com.hk/nwp3/getnotice.php?id={route}'
@@ -254,14 +240,11 @@ def find_bravo_notice_route(route, notice_dict):
             notice_dict[(notice_no, route)] = [entry[:11].strip(), entry[11:].strip()]
     print('\033[43;30;1m'+route+'\033[0m', end=' ')
 
-async def find_bravo_notice(threads):
+async def find_bravo_notice():
     notice_dict = dict()
     threads_list = [
         threading.Thread(target=find_bravo_notice_route, args=(rt, notice_dict))
         for rt in Citybus.routeslist
-    ] if SEP_THREADS_FOR_ROUTE else [
-        threading.Thread(target=find_bravo_notice_one, args=(Citybus.routeslist, slice(i,-1,threads), notice_dict))
-        for i in range(threads)
     ]
     for thread in threads_list:
         while threading.active_count() > MAX_ACTIVE_THREAD:
@@ -271,20 +254,6 @@ async def find_bravo_notice(threads):
         thread.join()
        
     return notice_dict
-
-def find_kmb_notice_one(routes, parts: slice, notice_dict):
-    for rt in routes[parts]:
-        notice_link = f'http://search.kmb.hk/KMBWebSite/Function/FunctionRequest.ashx?action=getAnnounce&route={rt}&bound=1'
-        rt_notices = json.loads(uo('GET', notice_link, timeout=250).data.decode('utf-8'))['data']
-        for rt_notice in rt_notices:
-            refno, url = rt_notice['kpi_referenceno'], rt_notice['kpi_noticeimageurl']
-            #with notice_dict_lock:
-            try:
-                    if url[-3:] == 'pdf' and refno[:2] != 'MP':
-                        notice_dict[(url[:-4], rt)] = [refno, rt_notice['kpi_title_chi']]
-            except TypeError:
-                    None
-    print(f'Thread {parts.start} ends', end='. ') #for debug
 
 def find_kmb_notice_route(route, notice_dict):
     notice_link = f'http://search.kmb.hk/KMBWebSite/Function/FunctionRequest.ashx?action=getAnnounce&route={route}&bound=1'
@@ -299,14 +268,11 @@ def find_kmb_notice_route(route, notice_dict):
                 None
     print('\033[41;1m'+route+'\033[0m', end=' ')
 
-async def find_kmb_notice(threads):
+async def find_kmb_notice():
     notice_dict = dict()
     threads_list = [
         threading.Thread(target=find_kmb_notice_route, args=(rt, notice_dict))
         for rt in KMBus.routeslist
-    ] if SEP_THREADS_FOR_ROUTE else [
-        threading.Thread(target=find_kmb_notice_one, args=(KMBus.routeslist, slice(i,-1,threads), notice_dict))
-        for i in range(threads)
     ]
     for thread in threads_list:
         while threading.active_count() > MAX_ACTIVE_THREAD:
@@ -318,7 +284,7 @@ async def find_kmb_notice(threads):
     return notice_dict
 
 import re
-async def find_nlb_notice(threads):
+async def find_nlb_notice():
     notice_dict = dict()
     noticepage = bs(uo('GET', 'https://www.nlb.com.hk/news', timeout=250).data, 'html.parser')
     notices = noticepage.find_all('a', href=re.compile("news/detail/.+"), class_="")
@@ -331,9 +297,9 @@ Citybus.findnotice = find_bravo_notice
 KMBus.findnotice = find_kmb_notice
 NLBus.findnotice = find_nlb_notice
 
-async def sort_notice(threads, company:Company):
+async def sort_notice(company:Company):
     try: 
-        notices = await company.findnotice(threads)
+        notices = await company.findnotice()
     except TimeoutError:
         print('\033[35;1mTimeout\033[0m')
     else:
@@ -351,9 +317,9 @@ async def sort_notice(threads, company:Company):
         notices.append(dict(zip(company.sort_criteria, notice)))
     return notices
 
-async def write_json(old_file, new_file, t, threads, company:Company) -> tuple[dict, set]:
+async def write_json(old_file, new_file, t, company:Company) -> tuple[dict, set]:
     print('working')
-    notices = await sort_notice(threads, company)
+    notices = await sort_notice(company)
     dictionary = {'data': notices, 'time': t}
     json_object = json.dumps(dictionary, indent=2)
     print('json')
@@ -376,7 +342,7 @@ async def probe_(textchannel: dc.TextChannel, error_channel: dc.TextChannel, com
     new_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_new.json'
     updates_file = f'{company.filename}{os.sep}data{os.sep}{company.filename}_notices_update.txt'
 
-    new_json, new_set = await write_json(old_file, new_file, t, thread, company)
+    new_json, new_set = await write_json(old_file, new_file, t, company)
     old_json, old_set = create_set_from_json(old_file, company)
 
     removed_list = check_notices_info(company.removed_buffer_set - new_set, company.buffered_json_data, company)
@@ -440,9 +406,12 @@ def run_discord_bot():
     
     @tasks.loop(seconds=15)
     async def probes_(text_channel, error_channel):
+        from random import shuffle as s
+        s(Citybus.routeslist)
+        s(KMBus.routeslist)
         await aio.gather(
-            probe_(text_channel, error_channel, Citybus, len(Citybus.routeslist) if SEP_THREADS_FOR_ROUTE else 4),
-            probe_(text_channel, error_channel, KMBus, len(KMBus.routeslist) if SEP_THREADS_FOR_ROUTE else 16),
+            probe_(text_channel, error_channel, Citybus),
+            probe_(text_channel, error_channel, KMBus),
             probe_(text_channel, error_channel, NLBus) # NLBus notices are not routewise
         )
 
