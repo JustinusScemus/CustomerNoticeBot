@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.12"
+BOT_VERSION = "5.12a"
 MAX_ACTIVE_THREAD = 500
 
 from companies import Company
@@ -92,7 +92,8 @@ async def batch_notify(channel: dc.TextChannel, error_channel: dc.TextChannel, m
     message += f'\nNotices {mode.name} ({len(notices)} in total):\n'
     back_message = message
     for notice in notices:
-        message += notice[company.sort_criteria.index("title")] + f'\t{company.link.format(target=notice[0])}\n'
+        message += notice[company.sort_criteria.index("title")] 
+        message += f'\t{company.link.format(target=notice[0])}\n' if mode != Mode.removed else '\n'
     try:
         await channel.send(message)
     except Exception as e:
