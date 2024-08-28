@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.12a"
+BOT_VERSION = "5.13"
 MAX_ACTIVE_THREAD = 500
 
 from companies import Company
@@ -420,19 +420,20 @@ def run_discord_bot():
     @tasks.loop(time=time_4_55)
     async def update_bravo_routes(textchannel: dc.TextChannel, error_channel: dc.TextChannel):
         print('Searching Citybus routes')
+        time = dt.now(tz(td(hours=+8)))
         in_route_list = find_bravo_routes()
         new_route_set = set(in_route_list) - set (Citybus.routeslist)
         removed_routes_set = set(Citybus.routeslist) - set (in_route_list)
         if len(new_route_set) + len(removed_routes_set) == 0:
-            message = Citybus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {Citybus.displayname}"
+            message = Citybus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {Citybus.displayname}, checked: {time.strftime("%Y-%m-%d")}"
             await textchannel.send(message)
         else:
           if len(new_route_set) > 0:
             message = ":yellow_circle:" * 5
-            message += f"CNB V{BOT_VERSION}: New route for bravovus: {new_route_set}\n@everyone"
+            message += f"CNB V{BOT_VERSION}: New route for bravovus: {new_route_set}, checked: {time.strftime("%Y-%m-%d")}\n@everyone"
             await error_channel.send(message)
           if len(removed_routes_set) > 0:
-            message = Citybus.circles(5) + f"CNB V{BOT_VERSION}: Citybus removed: {removed_routes_set}\n@everyone"
+            message = Citybus.circles(5) + f"CNB V{BOT_VERSION}: Citybus removed: {removed_routes_set}, checked: {time.strftime("%Y-%m-%d")}\n@everyone"
             await error_channel.send(message)
           Citybus.routeslist = in_route_list
         
@@ -440,19 +441,20 @@ def run_discord_bot():
     @tasks.loop(time=time_4_55)
     async def update_kmb_routes(textchannel: dc.TextChannel, error_channel: dc.TextChannel):
         print(f'Searching KMB routes')
+        time = dt.now(tz(td(hours=+8)))
         in_route_list = find_kmb_routes()
         new_route_set = set(in_route_list) - set (KMBus.routeslist)
         removed_routes_set = set(KMBus.routeslist) - set (in_route_list)
         if len(new_route_set) + len(removed_routes_set) == 0:
-            message = KMBus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {KMBus.displayname}"
+            message = KMBus.circles(3) + f"CNB V{BOT_VERSION}: Routes stay the same for {KMBus.displayname}, checked: {time.strftime("%Y-%m-%d")}"
             await textchannel.send(message)
         else:
           if len(new_route_set) > 0:
             message = ":red_circle:" * 5
-            message += f"CNB V{BOT_VERSION}: New route for KMBLWB: {new_route_set}\n@everyone"
+            message += f"CNB V{BOT_VERSION}: New route for KMBLWB: {new_route_set}, checked: {time.strftime("%Y-%m-%d")}\n@everyone"
             await error_channel.send(message)
           if len(removed_routes_set) > 0:
-            message = KMBus.circles(5) + f"CNB V{BOT_VERSION}: KMBLWB removed: {removed_routes_set}\n@everyone"
+            message = KMBus.circles(5) + f"CNB V{BOT_VERSION}: KMBLWB removed: {removed_routes_set}, checked: {time.strftime("%Y-%m-%d")}\n@everyone"
             await error_channel.send(message)
           KMBus.routeslist = in_route_list
         
