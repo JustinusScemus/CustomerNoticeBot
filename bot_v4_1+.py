@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.15"
+BOT_VERSION = "5.15a"
 MAX_ACTIVE_THREAD = 500
 
 from companies import Company
@@ -172,6 +172,7 @@ import threading
 async def download_pdf_and_notify(textchannel: dc.TextChannel, error_channel: dc.TextChannel, notices, company:Company, mode:Mode):
     field_to_look = company.sort_criteria.index('title') #2 if company == 'KMBLWB' else 1
     if company == NLBus:
+      if len(notices) > 0:
         print(f'Archiving notices from NLB:')
         for notice in notices:
             url = NLBus.link.format(target = notice[0])
@@ -181,7 +182,7 @@ async def download_pdf_and_notify(textchannel: dc.TextChannel, error_channel: dc
             print(f'finished archiving {notice[field_to_look]}')
             await textchannel.send(notice[field_to_look], file=dc.File(open(path, 'rb'), filename=f'{notice[0]}.html'))
             print(f'finished notifying {notice[field_to_look]}')
-        return
+      return
     if len(notices) > batch_threshold[mode]:
         print(f'Batch processing {len(notices)} notices:')
         print('\t'.join(n[field_to_look] for n in notices))
@@ -399,8 +400,9 @@ def initialize_file(company : Company):
         f = open(needfile, ('r' if os.path.exists(needfile) else 'x'))
         if f.mode=='x':
             f.write(datafiles[file])
-        print(f'{needfile} initialized.')
+        print(f'{needfile} initialized.', end='\t')
         f.close()
+    print()
 
 import atexit
 def run_discord_bot():
