@@ -11,8 +11,8 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.15a"
-MAX_ACTIVE_THREAD = 500
+BOT_VERSION = "5.15b"
+MAX_ACTIVE_THREAD = 200
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
