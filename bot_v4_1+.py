@@ -11,7 +11,7 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.16"
+BOT_VERSION = "5.16a"
 MAX_ACTIVE_THREAD = 200
 
 from companies import Company
@@ -299,10 +299,10 @@ import re
 async def find_nlb_notice():
     notice_dict = dict()
     noticepage = bs(uo('GET', 'https://www.nlb.com.hk/news', timeout=250).data, 'html.parser')
-    notices = noticepage.find_all('a', href=re.compile("news/detail/.+"), class_="")
+    notices = noticepage.find_all('a', href=re.compile("news/.+"), class_="")
     noticedates = noticepage.body.div(class_='main')[0].find_all('a', href="#", onclick="return false;")
     for notice in zip(notices, noticedates):
-        notice_dict[int(notice[0].get('href').strip('news/detail'))] = [notice[0].get_text(), notice[1].get_text()]
+        notice_dict[int(notice[0].get('href').strip('news'))] = [notice[0].get_text(), notice[1].get_text()]
     return notice_dict
 
 Citybus.findnotice = find_bravo_notice
