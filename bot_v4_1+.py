@@ -11,13 +11,13 @@ import urllib3
 uo = urllib3.PoolManager().request
 
 BOT_NAME = "Custumber Notice Bot"
-BOT_VERSION = "5.15b"
+BOT_VERSION = "5.16"
 MAX_ACTIVE_THREAD = 200
 
 from companies import Company
 Citybus = Company([], ['no', 'title', 'date', 'route'], 'yellow', "Citybus", "bravobus", 'http://mobile.bravobus.com.hk/pdf/{target}.pdf')
 KMBus = Company([], ['url', 'number', 'title', 'route'], 'red', "KMB", "KMBLWB", 'https://search.kmb.hk/KMBWebSite/AnnouncementPicture.ashx?url={target}.pdf')
-NLBus = Company([], ['no', 'title', 'date'], 'green', "NLB", "NLB", 'https://www.nlb.com.hk/news/detail/{target}')
+NLBus = Company([], ['no', 'title', 'date'], 'green', "NLB", "NLB", 'https://www.nlb.com.hk/news/{target}')
 
 from enum import Enum
 class Mode(Enum):
